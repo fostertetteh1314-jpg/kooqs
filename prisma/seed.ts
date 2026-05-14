@@ -15,10 +15,16 @@ async function main() {
   await prisma.category.deleteMany();
   await prisma.admin.deleteMany();
 
+  const adminEmail = process.env.ADMIN_BOOTSTRAP_EMAIL;
+  const adminPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+  if (!adminEmail || !adminPassword) {
+    throw new Error("ADMIN_BOOTSTRAP_EMAIL and ADMIN_BOOTSTRAP_PASSWORD must be set in .env before seeding");
+  }
+
   const admin = await prisma.admin.create({
     data: {
-      email: "admin@kooqs.com",
-      password: await bcrypt.hash("kooqs@2024!", 12),
+      email: adminEmail,
+      password: await bcrypt.hash(adminPassword, 12),
       name: "Kooqs Admin",
       role: "admin",
     },
@@ -121,7 +127,7 @@ async function main() {
   const totalItems = await prisma.menuItem.count();
   console.log(`✅ ${totalItems} menu items created with matched images`);
   console.log("\n🚀 Kooqs database seeded successfully!");
-  console.log("📧 Admin: admin@kooqs.com | 🔑 Password: kooqs@2024!");
+  console.log(`📧 Admin login: ${adminEmail}`);
 }
 
 main()

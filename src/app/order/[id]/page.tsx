@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { CheckCircle2, Clock, MapPin, Phone, ArrowLeft } from "lucide-react";
@@ -11,8 +11,13 @@ import CopyOrderNumber from "@/components/CopyOrderNumber";
 const STATUS_STEPS = ["pending", "confirmed", "preparing", "ready", "delivered"];
 
 export default async function OrderPage({ params }: { params: { id: string } }) {
-  const order = await prisma.order.findFirst({
-    where: { OR: [{ id: params.id }, { orderNumber: params.id }] },
+  // Protect against sequential orderNumber enumeration — require phone verification via /track
+  if (params.id.startsWith("KOOQS-")) {
+    redirect(`/track?order=${encodeURIComponent(params.id)}`);
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: params.id },
     include: { items: { include: { menuItem: { select: { image: true } } } } },
   });
 

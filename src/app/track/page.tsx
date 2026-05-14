@@ -1,34 +1,40 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Package, Search, Loader2, Phone } from "lucide-react";
 import Navbar from "@/components/Navbar";
 
-export default function TrackOrderPage() {
+function TrackForm() {
   const router = useRouter();
-  const [orderNumber, setOrderNumber] = useState("");
+  const searchParams = useSearchParams();
+  const [orderNumber, setOrderNumber] = useState(searchParams.get("order") ?? "");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleTrack(e: React.FormEvent) {
     e.preventDefault();
-    const trimmed = orderNumber.trim();
-    if (!trimmed) return;
+    const trimmedOrder = orderNumber.trim().toUpperCase();
+    const trimmedPhone = phone.trim();
+    if (!trimmedOrder || !trimmedPhone) return;
 
     setLoading(true);
     setError("");
 
     try {
-      const res = await fetch(`/api/orders/${encodeURIComponent(trimmed)}`);
+      const url = `/api/orders/${encodeURIComponent(trimmedOrder)}?phone=${encodeURIComponent(trimmedPhone)}`;
+      const res = await fetch(url);
       if (!res.ok) {
-        setError("We couldn't find that order. Double-check your order number and try again.");
+        setError("We couldn't find that order. Double-check your order number and phone, then try again.");
         setLoading(false);
         return;
       }
-      router.push(`/order/${encodeURIComponent(trimmed)}`);
+      const order = await res.json();
+      // Redirect to cuid URL — unguessable, shareable safely
+      router.push(`/order/${order.id}`);
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -44,7 +50,7 @@ export default function TrackOrderPage() {
           <div className="flex flex-col items-center mb-10">
             <Image src="/logo.jpeg" alt="Kooqs" width={72} height={72} className="rounded-full border-2 border-kooqs-red/40 shadow-xl mb-4" />
             <h1 className="text-white font-black text-3xl text-center">Track Your Order</h1>
-            <p className="text-kooqs-text-dim text-sm mt-2 text-center">Enter your order number to see the latest status</p>
+            <p className="text-kooqs-text-dim text-sm mt-2 text-center">Enter your order number and the phone you used at checkout</p>
           </div>
 
           {/* Search card */}
@@ -64,6 +70,20 @@ export default function TrackOrderPage() {
                 />
               </div>
 
+              <div>
+                <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5 flex items-center gap-1.5">
+                  <Phone size={14} className="text-kooqs-red" /> Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => { setPhone(e.target.value); setError(""); }}
+                  placeholder="055 000 0000"
+                  className="input"
+                />
+                <p className="text-kooqs-text-dim text-xs mt-1">The number you entered when placing the order</p>
+              </div>
+
               {error && (
                 <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
                   {error}
@@ -72,7 +92,7 @@ export default function TrackOrderPage() {
 
               <button
                 type="submit"
-                disabled={loading || !orderNumber.trim()}
+                disabled={loading || !orderNumber.trim() || !phone.trim()}
                 className="btn-primary w-full flex items-center justify-center gap-2"
               >
                 {loading ? (
@@ -107,5 +127,13 @@ export default function TrackOrderPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function TrackOrderPage() {
+  return (
+    <Suspense>
+      <TrackForm />
+    </Suspense>
   );
 }
