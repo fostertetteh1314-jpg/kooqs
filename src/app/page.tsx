@@ -5,24 +5,25 @@ import MenuSection from "@/components/MenuSection";
 import HeroBanner from "@/components/HeroBanner";
 import SplashGate from "@/components/SplashGate";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default async function HomePage() {
-  const categories = await prisma.category.findMany({
-    orderBy: { order: "asc" },
-    include: {
-      menuItems: {
-        where: { available: true },
-        orderBy: [{ featured: "desc" }, { createdAt: "asc" }],
+  const [categories, featuredItems] = await Promise.all([
+    prisma.category.findMany({
+      orderBy: { order: "asc" },
+      include: {
+        menuItems: {
+          where: { available: true },
+          orderBy: [{ featured: "desc" }, { createdAt: "asc" }],
+        },
       },
-    },
-  });
-
-  const featuredItems = await prisma.menuItem.findMany({
-    where: { featured: true, available: true },
-    include: { category: true },
-    take: 8,
-  });
+    }),
+    prisma.menuItem.findMany({
+      where: { featured: true, available: true },
+      include: { category: true },
+      take: 8,
+    }),
+  ]);
 
   const slideshowImages = categories
     .flatMap((c) => c.menuItems.map((m) => m.image))
