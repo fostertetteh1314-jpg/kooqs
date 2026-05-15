@@ -28,6 +28,10 @@ out/
 # Runtime uploads (no longer used — images go to Cloudinary)
 public/uploads/
 
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
 # Debug
 npm-debug.log*
 

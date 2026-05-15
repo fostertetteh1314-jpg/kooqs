@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, Filter, ChevronDown, Clock, Phone, MapPin, Loader2, RefreshCw, BellRing, BellOff } from "lucide-react";
+import { Search, Filter, ChevronDown, Clock, Phone, MapPin, Loader2, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { getStatusInfo, getNextStatus, formatPrice, ORDER_STATUSES } from "@/lib/utils";
 import type { Order } from "@/types";
 import toast from "react-hot-toast";
-import { useNewOrderAlarm } from "@/hooks/useNewOrderAlarm";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -34,8 +33,6 @@ export default function OrdersPage() {
     const id = setInterval(() => { fetchOrders(); }, 5000);
     return () => clearInterval(id);
   }, [fetchOrders]);
-
-  const { alarming, acknowledge, unlock, unlocked, newestOrder } = useNewOrderAlarm(orders);
 
   async function updateStatus(orderId: string, newStatus: string) {
     setUpdatingId(orderId);
@@ -65,45 +62,14 @@ export default function OrdersPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 mt-14 lg:mt-0">
-      {/* New order alarm banner */}
-      {alarming && newestOrder && (
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-xl border-2 border-kooqs-red bg-kooqs-red/20 px-4 py-4 animate-bounce">
-          <div className="flex items-center gap-3">
-            <BellRing size={24} className="text-kooqs-red flex-shrink-0 animate-spin" style={{ animationDuration: "0.6s" }} />
-            <div>
-              <p className="text-white font-black text-base">🔔 New Order!</p>
-              <p className="text-white text-sm font-bold">{newestOrder.orderNumber} — {newestOrder.customerName}</p>
-              <p className="text-kooqs-text-dim text-xs">{newestOrder.phone} · {newestOrder.orderType}</p>
-            </div>
-          </div>
-          <button
-            onClick={acknowledge}
-            className="flex-shrink-0 bg-kooqs-red text-white text-sm font-black px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Silence ✓
-          </button>
-        </div>
-      )}
-
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-white font-black text-2xl sm:text-3xl">Orders</h1>
           <p className="text-kooqs-text-dim text-sm mt-1">{filtered.length} order{filtered.length !== 1 ? "s" : ""}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {!unlocked && (
-            <button
-              onClick={unlock}
-              title="Enable sound alerts for new orders"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-kooqs-card border border-kooqs-border hover:border-yellow-500 transition-colors text-kooqs-text-dim hover:text-yellow-400 text-xs font-medium"
-            >
-              <BellOff size={14} /> Enable alerts
-            </button>
-          )}
-          <button onClick={fetchOrders} className="p-2 rounded-xl bg-kooqs-card border border-kooqs-border hover:border-kooqs-red transition-colors text-kooqs-text-dim hover:text-white">
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-          </button>
-        </div>
+        <button onClick={fetchOrders} className="p-2 rounded-xl bg-kooqs-card border border-kooqs-border hover:border-kooqs-red transition-colors text-kooqs-text-dim hover:text-white">
+          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+        </button>
       </div>
 
       {/* Filters */}

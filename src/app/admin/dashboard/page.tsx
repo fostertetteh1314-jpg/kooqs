@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import DashboardCharts from "@/components/admin/DashboardCharts";
+import DashboardRefresher from "@/components/admin/DashboardRefresher";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 mt-14 lg:mt-0">
+      <DashboardRefresher />
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-white font-black text-2xl sm:text-3xl">Dashboard</h1>
