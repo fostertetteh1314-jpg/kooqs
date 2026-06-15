@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { SessionProvider } from "@/components/admin/SessionProvider";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminOrderWatcher from "@/components/admin/AdminOrderWatcher";
