@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import { Plus, Flame, Leaf, Star } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { formatPrice } from "@/lib/utils";
@@ -11,6 +12,7 @@ import { useParticleBurst } from "@/components/MenuItemParticleBurst";
 export default function MenuItemCard({ item }: { item: MenuItem }) {
   const { addItem, state } = useCart();
   const { canvasRef, trigger } = useParticleBurst();
+  const [imgError, setImgError] = useState(false);
 
   const cartItem = state.items.find((i) => i.menuItem.id === item.id);
 
@@ -28,12 +30,14 @@ export default function MenuItemCard({ item }: { item: MenuItem }) {
         className="relative h-44 overflow-hidden bg-kooqs-muted cursor-pointer"
         onClick={trigger}
       >
-        {item.image ? (
+        {item.image && !imgError ? (
           <Image
             src={item.image}
             alt={item.name}
             fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
             className="object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={() => setImgError(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-5xl">🍽️</div>
