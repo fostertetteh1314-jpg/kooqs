@@ -1,31 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight } from "lucide-react";
+import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight, CreditCard } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { formatPrice } from "@/lib/utils";
 import toast from "react-hot-toast";
 import Navbar from "@/components/Navbar";
-import MomoPaymentInstructions from "@/components/MomoPaymentInstructions";
 
 const DELIVERY_FEE = parseFloat(process.env.NEXT_PUBLIC_DELIVERY_FEE ?? "2.99");
 const FREE_THRESHOLD = parseFloat(process.env.NEXT_PUBLIC_FREE_DELIVERY_THRESHOLD ?? "30");
+const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "";
+
+declare global {
+  interface Window {
+    PaystackPop: {
+      setup: (config: {
+        key: string;
+        email: string;
+        amount: number;
+        currency: string;
+        ref: string;
+        label?: string;
+        metadata?: object;
+        callback: (response: { reference: string }) => void;
+        onClose: () => void;
+      }) => { openIframe: () => void };
+    };
+  }
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { state, subtotal, clearCart } = useCart();
   const [orderType, setOrderType] = useState<"pickup" | "delivery">("pickup");
   const [loading, setLoading] = useState(false);
+  const [paystackReady, setPaystackReady] = useState(false);
 
   const [form, setForm] = useState({
-    customerName: "", phone: "", address: "", notes: "",
+    customerName: "", email: "", phone: "", address: "", notes: "",
   });
 
   const deliveryFee = orderType === "delivery" && subtotal < FREE_THRESHOLD ? DELIVERY_FEE : 0;
   const total = subtotal + deliveryFee;
+
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.async = true;
+    script.onload = () => setPaystackReady(true);
+    document.body.appendChild(script);
+    return () => { document.body.removeChild(script); };
+  }, []);
 
   if (state.items.length === 0) {
     return (
@@ -40,13 +68,7 @@ export default function CheckoutPage() {
     );
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (orderType === "delivery" && !form.address.trim()) {
-      toast.error("Please enter your delivery address.");
-      return;
-    }
-    setLoading(true);
+  async function createOrder(paystackRef: string) {
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -54,9 +76,11 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           customerName: form.customerName,
           phone: form.phone,
+          email: form.email,
           orderType,
           address: form.address || undefined,
           notes: form.notes || undefined,
+          paystackRef,
           items: state.items.map((i) => ({
             menuItemId: i.menuItem.id,
             quantity: i.quantity,
@@ -70,9 +94,47 @@ export default function CheckoutPage() {
       clearCart();
       router.push(`/order/${order.id}`);
     } catch {
-      toast.error("Something went wrong. Please try again.");
+      toast.error(`Payment was successful but order failed. Quote ref: ${paystackRef} and call us.`);
       setLoading(false);
     }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (orderType === "delivery" && !form.address.trim()) {
+      toast.error("Please enter your delivery address.");
+      return;
+    }
+    if (!paystackReady || !window.PaystackPop) {
+      toast.error("Payment system not ready. Please refresh and try again.");
+      return;
+    }
+    setLoading(true);
+
+    const handler = window.PaystackPop.setup({
+      key: PAYSTACK_KEY,
+      email: form.email,
+      amount: Math.round(total * 100),
+      currency: "GHS",
+      ref: `kooqs-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      label: form.customerName,
+      metadata: {
+        custom_fields: [
+          { display_name: "Customer Name", variable_name: "customer_name", value: form.customerName },
+          { display_name: "Phone", variable_name: "phone", value: form.phone },
+          { display_name: "Order Type", variable_name: "order_type", value: orderType },
+        ],
+      },
+      callback: (response) => {
+        createOrder(response.reference);
+      },
+      onClose: () => {
+        toast("Payment cancelled.", { icon: "ℹ️" });
+        setLoading(false);
+      },
+    });
+
+    handler.openIframe();
   }
 
   return (
@@ -129,6 +191,17 @@ export default function CheckoutPage() {
                   />
                 </div>
                 <div>
+                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">Email *</label>
+                  <input
+                    required
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                    placeholder="you@example.com"
+                    className="input"
+                  />
+                </div>
+                <div>
                   <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">Phone *</label>
                   <input
                     required
@@ -166,7 +239,21 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            <MomoPaymentInstructions total={total} />
+            {/* Payment info */}
+            <div className="card p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <CreditCard size={20} className="text-kooqs-red" />
+                <h2 className="text-white font-bold text-lg">Payment — Paystack</h2>
+              </div>
+              <p className="text-kooqs-text-dim text-sm leading-relaxed">
+                You&apos;ll be taken to a secure Paystack checkout to pay{" "}
+                <span className="text-kooqs-red font-bold">{formatPrice(total)}</span>. We accept cards, MTN MoMo, Vodafone Cash, and AirtelTigo Money.
+              </p>
+              <div className="flex items-center gap-2 mt-4">
+                <span className="text-xs text-kooqs-text-dim">🔒 Secured by</span>
+                <span className="text-xs font-bold text-white">Paystack</span>
+              </div>
+            </div>
           </div>
 
           {/* Right: Order summary */}
@@ -217,13 +304,13 @@ export default function CheckoutPage() {
                 className="btn-primary w-full mt-5 flex items-center justify-center gap-2"
               >
                 {loading ? (
-                  <><Loader2 size={16} className="animate-spin" /> Placing Order...</>
+                  <><Loader2 size={16} className="animate-spin" /> Processing...</>
                 ) : (
-                  <>Place Order — {formatPrice(total)} <ChevronRight size={16} /></>
+                  <><CreditCard size={16} /> Pay {formatPrice(total)} with Paystack <ChevronRight size={16} /></>
                 )}
               </button>
               <p className="text-kooqs-text-dim text-xs text-center mt-3">
-                📱 We&apos;ll call you on the phone number above to confirm
+                🔒 Your payment is secured by Paystack
               </p>
             </div>
           </div>

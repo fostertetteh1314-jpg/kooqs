@@ -43,6 +43,8 @@ export interface Order {
   total: number;
   notes?: string | null;
   estimatedTime?: number | null;
+  email?: string | null;
+  paystackRef?: string | null;
   createdAt: string;
   updatedAt: string;
 }
