@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         "X-API-USER": process.env.MOOLRE_USER!,
+        "X-API-KEY": process.env.MOOLRE_API_KEY!,
         "X-API-PUBKEY": process.env.MOOLRE_PUB_KEY!,
       },
       body: JSON.stringify(body),
