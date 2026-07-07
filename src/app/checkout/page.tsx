@@ -12,7 +12,7 @@ import Navbar from "@/components/Navbar";
 
 const DELIVERY_FEE = parseFloat(process.env.NEXT_PUBLIC_DELIVERY_FEE ?? "2.99");
 const FREE_THRESHOLD = parseFloat(process.env.NEXT_PUBLIC_FREE_DELIVERY_THRESHOLD ?? "30");
-const MOOLRE_POS = process.env.NEXT_PUBLIC_MOOLRE_POS_LINK ?? "";
+const MOOLRE_POS_URL = "https://pos.moolre.com/Ul3QAGVyLrDREeBapcKnzWfZxdOTMF";
 
 type OrderType = "pickup" | "delivery";
 type PayStep = "form" | "paying" | "creating";
@@ -45,8 +45,7 @@ export default function CheckoutPage() {
   }
 
   function openPOS() {
-    const url = `${MOOLRE_POS}?amount=${total.toFixed(2)}&ref=${orderRef}&name=${encodeURIComponent(form.customerName)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.open(MOOLRE_POS_URL, "_blank", "noopener,noreferrer");
     setPayStep("paying");
   }
 
