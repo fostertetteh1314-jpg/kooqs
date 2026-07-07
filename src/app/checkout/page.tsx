@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight, Phone, CheckCircle } from "lucide-react";
+import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight, Phone, CheckCircle, Copy } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { formatPrice } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -13,15 +13,20 @@ import Navbar from "@/components/Navbar";
 const DELIVERY_FEE = parseFloat(process.env.NEXT_PUBLIC_DELIVERY_FEE ?? "2.99");
 const FREE_THRESHOLD = parseFloat(process.env.NEXT_PUBLIC_FREE_DELIVERY_THRESHOLD ?? "30");
 
+const MOMO_NUMBERS = [
+  { network: "MTN", number: process.env.NEXT_PUBLIC_MOMO_MTN_NUMBER ?? "055 090 7888", color: "bg-yellow-500" },
+  { network: "Vodafone", number: process.env.NEXT_PUBLIC_MOMO_VODAFONE_NUMBER ?? "055 470 4380", color: "bg-red-500" },
+];
+
 type OrderType = "pickup" | "delivery";
-type PayStep = "form" | "sending" | "awaiting" | "creating";
+type PayStep = "form" | "confirming" | "creating";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { state, subtotal, clearCart } = useCart();
   const [orderType, setOrderType] = useState<OrderType>("pickup");
   const [payStep, setPayStep] = useState<PayStep>("form");
-  const [moolreRef, setMoolreRef] = useState("");
+  const [orderRef] = useState(() => `KOOQS_${Date.now()}`);
 
   const [form, setForm] = useState({
     customerName: "", phone: "", address: "", notes: "",
@@ -43,33 +48,6 @@ export default function CheckoutPage() {
     );
   }
 
-  async function initiateMoolrePayment() {
-    setPayStep("sending");
-    const externalRef = `KOOQS_${Date.now()}`;
-
-    try {
-      const res = await fetch("/api/payment/moolre", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: total, phone: form.phone, externalRef }),
-      });
-
-      const data = await res.json();
-
-      if (data.code === "TR099" || data.code === "TP14" || data.status === 1) {
-        setMoolreRef(externalRef);
-        setPayStep("awaiting");
-        toast.success("Payment prompt sent! Check your phone.");
-      } else {
-        toast.error(data.message || "Payment initiation failed. Please try again.");
-        setPayStep("form");
-      }
-    } catch {
-      toast.error("Network error. Please try again.");
-      setPayStep("form");
-    }
-  }
-
   async function createOrder() {
     setPayStep("creating");
     try {
@@ -82,7 +60,7 @@ export default function CheckoutPage() {
           orderType,
           address: form.address || undefined,
           notes: form.notes || undefined,
-          paystackRef: moolreRef,
+          paystackRef: orderRef,
           items: state.items.map((i) => ({
             menuItemId: i.menuItem.id,
             quantity: i.quantity,
@@ -96,8 +74,8 @@ export default function CheckoutPage() {
       clearCart();
       router.push(`/order/${order.id}`);
     } catch {
-      toast.error(`Order failed. Please call us with ref: ${moolreRef}`);
-      setPayStep("awaiting");
+      toast.error("Order failed. Please call us directly.");
+      setPayStep("confirming");
     }
   }
 
@@ -107,50 +85,55 @@ export default function CheckoutPage() {
       toast.error("Please enter your delivery address.");
       return;
     }
-    initiateMoolrePayment();
+    setPayStep("confirming");
   }
 
-  if (payStep === "sending") {
-    return (
-      <div className="min-h-screen bg-kooqs-dark flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 size={48} className="text-kooqs-red animate-spin mx-auto mb-4" />
-          <p className="text-white font-bold text-lg">Sending payment prompt…</p>
-          <p className="text-kooqs-text-dim text-sm mt-2">Please wait</p>
-        </div>
-      </div>
-    );
+  function copyNumber(num: string) {
+    navigator.clipboard.writeText(num.replace(/\s/g, ""));
+    toast.success("Number copied!");
   }
 
-  if (payStep === "awaiting" || payStep === "creating") {
+  if (payStep === "confirming" || payStep === "creating") {
     return (
       <div className="min-h-screen bg-kooqs-dark">
         <Navbar />
-        <main className="max-w-md mx-auto px-4 py-16 text-center">
-          <div className="card p-8">
-            <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Phone size={32} className="text-yellow-400" />
+        <main className="max-w-md mx-auto px-4 py-10 text-center">
+          <div className="card p-7">
+            <div className="w-14 h-14 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Phone size={28} className="text-yellow-400" />
             </div>
-            <h2 className="text-white font-black text-2xl mb-2">Check Your Phone</h2>
-            <p className="text-kooqs-text-dim text-sm mb-3">
-              A Mobile Money payment prompt has been sent to
+            <h2 className="text-white font-black text-2xl mb-1">Send Mobile Money</h2>
+            <p className="text-kooqs-text-dim text-sm mb-5">
+              Send exactly <span className="text-kooqs-red font-bold">{formatPrice(total)}</span> to any number below, then tap <strong className="text-white">Place My Order</strong>.
             </p>
-            <p className="text-kooqs-red font-bold text-lg mb-5">{form.phone}</p>
 
-            <div className="bg-kooqs-surface rounded-xl p-4 mb-6 text-left space-y-2">
+            <div className="space-y-3 mb-5">
+              {MOMO_NUMBERS.filter(m => m.number).map((m) => (
+                <div key={m.network} className="flex items-center justify-between bg-kooqs-surface rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-2.5 h-2.5 rounded-full ${m.color}`} />
+                    <div className="text-left">
+                      <p className="text-kooqs-text-dim text-xs">{m.network} MoMo</p>
+                      <p className="text-white font-bold">{m.number}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => copyNumber(m.number)} className="text-kooqs-text-dim hover:text-white transition-colors">
+                    <Copy size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-kooqs-surface rounded-xl p-4 mb-6 text-left space-y-1.5">
               <div className="flex justify-between text-sm">
                 <span className="text-kooqs-text-dim">Amount</span>
                 <span className="text-white font-black">{formatPrice(total)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-kooqs-text-dim">Reference</span>
-                <span className="text-white font-mono text-xs">{moolreRef}</span>
+                <span className="text-kooqs-text-dim">Your name as reference</span>
+                <span className="text-white font-semibold">{form.customerName.split(" ")[0]}</span>
               </div>
             </div>
-
-            <p className="text-kooqs-text-dim text-sm mb-6">
-              Approve the payment on your phone, then tap the button below to complete your order.
-            </p>
 
             <button
               onClick={createOrder}
@@ -158,9 +141,9 @@ export default function CheckoutPage() {
               className="btn-primary w-full flex items-center justify-center gap-2"
             >
               {payStep === "creating" ? (
-                <><Loader2 size={16} className="animate-spin" /> Creating your order…</>
+                <><Loader2 size={16} className="animate-spin" /> Placing your order…</>
               ) : (
-                <><CheckCircle size={16} /> I&apos;ve approved — Place My Order</>
+                <><CheckCircle size={16} /> I&apos;ve sent the payment — Place My Order</>
               )}
             </button>
 
@@ -169,7 +152,7 @@ export default function CheckoutPage() {
               disabled={payStep === "creating"}
               className="mt-4 text-kooqs-text-dim text-sm hover:text-white transition-colors block w-full"
             >
-              Cancel and go back
+              Go back and edit
             </button>
           </div>
         </main>
@@ -188,7 +171,6 @@ export default function CheckoutPage() {
         <h1 className="text-white font-black text-3xl mb-8">Checkout</h1>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          {/* Left: Form */}
           <div className="lg:col-span-3 space-y-6">
             {/* Order type */}
             <div className="card p-5">
@@ -233,9 +215,7 @@ export default function CheckoutPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">
-                    MTN MoMo Number *
-                  </label>
+                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">Phone Number *</label>
                   <input
                     required
                     type="tel"
@@ -244,9 +224,6 @@ export default function CheckoutPage() {
                     placeholder="055 000 0000"
                     className="input"
                   />
-                  <p className="text-kooqs-text-dim text-xs mt-1">
-                    Payment prompt will be sent to this MTN number.
-                  </p>
                 </div>
                 {orderType === "delivery" && (
                   <div>
@@ -264,9 +241,7 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 <div>
-                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">
-                    Special Instructions (optional)
-                  </label>
+                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">Special Instructions (optional)</label>
                   <textarea
                     value={form.notes}
                     onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
@@ -281,20 +256,24 @@ export default function CheckoutPage() {
             <div className="card p-5">
               <div className="flex items-center gap-3 mb-3">
                 <Phone size={20} className="text-kooqs-red" />
-                <h2 className="text-white font-bold text-lg">Payment — MTN Mobile Money</h2>
+                <h2 className="text-white font-bold text-lg">Payment — Mobile Money</h2>
               </div>
               <p className="text-kooqs-text-dim text-sm leading-relaxed">
-                A USSD prompt will be sent to your MTN number. Approve it on your phone to pay{" "}
-                <span className="text-kooqs-red font-bold">{formatPrice(total)}</span>.
+                After reviewing your order, you&apos;ll be shown our MoMo numbers to send{" "}
+                <span className="text-kooqs-red font-bold">{formatPrice(total)}</span>. We&apos;ll confirm and start preparing once payment is received.
               </p>
-              <div className="flex items-center gap-2 mt-4">
-                <span className="text-xs text-kooqs-text-dim">🔒 Secured by</span>
-                <span className="text-xs font-bold text-white">Moolre</span>
+              <div className="flex items-center gap-4 mt-4">
+                <span className="flex items-center gap-1.5 text-xs text-kooqs-text-dim">
+                  <span className="w-2 h-2 rounded-full bg-yellow-500" /> MTN MoMo
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-kooqs-text-dim">
+                  <span className="w-2 h-2 rounded-full bg-red-500" /> Vodafone Cash
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Right: Order summary */}
+          {/* Order summary */}
           <div className="lg:col-span-2">
             <div className="card p-5 sticky top-20">
               <h2 className="text-white font-bold text-lg mb-4">Order Summary</h2>
@@ -340,10 +319,10 @@ export default function CheckoutPage() {
                 type="submit"
                 className="btn-primary w-full mt-5 flex items-center justify-center gap-2"
               >
-                <Phone size={16} /> Pay {formatPrice(total)} via MoMo <ChevronRight size={16} />
+                <Phone size={16} /> Continue to Payment <ChevronRight size={16} />
               </button>
               <p className="text-kooqs-text-dim text-xs text-center mt-3">
-                🔒 Secured by Moolre
+                MTN MoMo &amp; Vodafone Cash accepted
               </p>
             </div>
           </div>
