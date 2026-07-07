@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/utils";
 import { sendAdminOrderNotificationEmail } from "@/lib/email";
+import { sendSMS, buildOrderConfirmationSMS } from "@/lib/sms";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -93,6 +94,16 @@ export async function POST(request: NextRequest) {
   };
 
   sendAdminOrderNotificationEmail(emailData).catch(console.error);
+
+  const smsText = buildOrderConfirmationSMS({
+    customerName: order.customerName,
+    orderNumber: order.orderNumber,
+    total: order.total,
+    orderType: order.orderType,
+    estimatedTime: order.estimatedTime,
+    phone: order.phone,
+  });
+  sendSMS(order.phone, smsText, order.orderNumber).catch(console.error);
 
   return NextResponse.json(order, { status: 201 });
 }
