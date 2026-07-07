@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight, Phone, CheckCircle } from "lucide-react";
+import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight, Phone, CheckCircle, KeyRound } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { formatPrice } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -14,7 +14,7 @@ const DELIVERY_FEE = parseFloat(process.env.NEXT_PUBLIC_DELIVERY_FEE ?? "2.99");
 const FREE_THRESHOLD = parseFloat(process.env.NEXT_PUBLIC_FREE_DELIVERY_THRESHOLD ?? "30");
 
 type OrderType = "pickup" | "delivery";
-type PayStep = "form" | "sending" | "awaiting" | "creating";
+type PayStep = "form" | "sending" | "otp" | "verifying" | "creating";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -22,6 +22,7 @@ export default function CheckoutPage() {
   const [orderType, setOrderType] = useState<OrderType>("pickup");
   const [payStep, setPayStep] = useState<PayStep>("form");
   const [moolreRef, setMoolreRef] = useState("");
+  const [otp, setOtp] = useState("");
 
   const [form, setForm] = useState({
     customerName: "", phone: "", address: "", notes: "",
@@ -43,27 +44,35 @@ export default function CheckoutPage() {
     );
   }
 
+  async function callMoolre(sessionId?: string) {
+    const externalRef = moolreRef || `KOOQS_${Date.now()}`;
+    if (!moolreRef) setMoolreRef(externalRef);
+
+    const res = await fetch("/api/payment/moolre", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: total,
+        phone: form.phone,
+        externalRef,
+        ...(sessionId ? { sessionId } : {}),
+      }),
+    });
+    return res.json();
+  }
+
   async function initiatePayment() {
     setPayStep("sending");
-    const externalRef = `KOOQS_${Date.now()}`;
-
     try {
-      const res = await fetch("/api/payment/moolre", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: total, phone: form.phone, externalRef }),
-      });
+      const data = await callMoolre();
 
-      const data = await res.json();
-
-      if (data.status === 1) {
-        setMoolreRef(externalRef);
-        setPayStep("awaiting");
-        if (data.code === "TP14") {
-          toast.success("Check your phone — approve the payment SMS to continue.");
-        } else {
-          toast.success("Payment prompt sent! Approve it on your phone.");
-        }
+      if (data.status === 1 && data.code === "TP14") {
+        setPayStep("otp");
+        toast.success("OTP sent to your phone. Enter it below.");
+      } else if (data.status === 1) {
+        // TR099 or other success — no OTP needed, proceed directly
+        setPayStep("creating");
+        await createOrder();
       } else {
         toast.error(data.message || "Payment failed. Please try again.");
         setPayStep("form");
@@ -71,6 +80,25 @@ export default function CheckoutPage() {
     } catch {
       toast.error("Network error. Please try again.");
       setPayStep("form");
+    }
+  }
+
+  async function verifyOtp() {
+    if (!otp.trim()) { toast.error("Please enter the OTP."); return; }
+    setPayStep("verifying");
+    try {
+      const data = await callMoolre(otp.trim());
+
+      if (data.status === 1) {
+        await createOrder();
+      } else {
+        toast.error(data.message || "Incorrect OTP. Please try again.");
+        setOtp("");
+        setPayStep("otp");
+      }
+    } catch {
+      toast.error("Network error. Please try again.");
+      setPayStep("otp");
     }
   }
 
@@ -101,7 +129,7 @@ export default function CheckoutPage() {
       router.push(`/order/${order.id}`);
     } catch {
       toast.error(`Order failed. Call us with ref: ${moolreRef}`);
-      setPayStep("awaiting");
+      setPayStep("otp");
     }
   }
 
@@ -114,66 +142,65 @@ export default function CheckoutPage() {
     initiatePayment();
   }
 
-  if (payStep === "sending") {
+  // Loading screen
+  if (payStep === "sending" || payStep === "verifying" || payStep === "creating") {
+    const messages: Record<string, string> = {
+      sending: "Sending payment request…",
+      verifying: "Verifying OTP…",
+      creating: "Placing your order…",
+    };
     return (
       <div className="min-h-screen bg-kooqs-dark flex items-center justify-center">
         <div className="text-center">
           <Loader2 size={48} className="text-kooqs-red animate-spin mx-auto mb-4" />
-          <p className="text-white font-bold text-lg">Initiating payment…</p>
-          <p className="text-kooqs-text-dim text-sm mt-2">Please wait</p>
+          <p className="text-white font-bold text-lg">{messages[payStep]}</p>
         </div>
       </div>
     );
   }
 
-  if (payStep === "awaiting" || payStep === "creating") {
+  // OTP screen
+  if (payStep === "otp") {
     return (
       <div className="min-h-screen bg-kooqs-dark">
         <Navbar />
         <main className="max-w-md mx-auto px-4 py-10 text-center">
           <div className="card p-7">
             <div className="w-14 h-14 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Phone size={28} className="text-yellow-400" />
+              <KeyRound size={28} className="text-yellow-400" />
             </div>
-            <h2 className="text-white font-black text-2xl mb-2">Check Your Phone</h2>
+            <h2 className="text-white font-black text-2xl mb-2">Enter OTP</h2>
             <p className="text-kooqs-text-dim text-sm mb-5">
-              A payment request has been sent to{" "}
-              <span className="text-kooqs-red font-bold">{form.phone}</span>.
-              Approve the SMS or USSD prompt to pay{" "}
-              <span className="text-white font-bold">{formatPrice(total)}</span>.
+              An OTP was sent to <span className="text-kooqs-red font-bold">{form.phone}</span>.
+              Enter it below to approve the <span className="text-white font-bold">{formatPrice(total)}</span> payment.
             </p>
 
-            <div className="bg-kooqs-surface rounded-xl p-4 mb-6 text-left space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-kooqs-text-dim">Amount</span>
-                <span className="text-white font-black">{formatPrice(total)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-kooqs-text-dim">Phone</span>
-                <span className="text-white">{form.phone}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-kooqs-text-dim">Reference</span>
-                <span className="text-white font-mono text-xs">{moolreRef}</span>
-              </div>
-            </div>
+            <input
+              type="number"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              placeholder="Enter OTP"
+              className="input text-center text-2xl tracking-widest mb-5 font-bold"
+              autoFocus
+            />
 
             <button
-              onClick={createOrder}
-              disabled={payStep === "creating"}
-              className="btn-primary w-full flex items-center justify-center gap-2"
+              onClick={verifyOtp}
+              className="btn-primary w-full flex items-center justify-center gap-2 mb-3"
             >
-              {payStep === "creating" ? (
-                <><Loader2 size={16} className="animate-spin" /> Placing your order…</>
-              ) : (
-                <><CheckCircle size={16} /> I&apos;ve approved — Place My Order</>
-              )}
+              <CheckCircle size={16} /> Confirm Payment &amp; Place Order
             </button>
 
             <button
-              onClick={() => setPayStep("form")}
-              disabled={payStep === "creating"}
-              className="mt-4 text-kooqs-text-dim text-sm hover:text-white transition-colors block w-full"
+              onClick={() => { setOtp(""); initiatePayment(); }}
+              className="text-kooqs-text-dim text-sm hover:text-white transition-colors block w-full mb-2"
+            >
+              Resend OTP
+            </button>
+
+            <button
+              onClick={() => { setMoolreRef(""); setPayStep("form"); }}
+              className="text-kooqs-text-dim text-sm hover:text-white transition-colors block w-full"
             >
               Cancel and go back
             </button>
@@ -247,7 +274,7 @@ export default function CheckoutPage() {
                     placeholder="055 000 0000"
                     className="input"
                   />
-                  <p className="text-kooqs-text-dim text-xs mt-1">Payment prompt will be sent to this number.</p>
+                  <p className="text-kooqs-text-dim text-xs mt-1">An OTP will be sent to this number to confirm payment.</p>
                 </div>
                 {orderType === "delivery" && (
                   <div>
@@ -283,8 +310,8 @@ export default function CheckoutPage() {
                 <h2 className="text-white font-bold text-lg">Payment — MTN Mobile Money</h2>
               </div>
               <p className="text-kooqs-text-dim text-sm leading-relaxed">
-                A payment prompt will be sent to your MTN number. Approve it on your phone to pay{" "}
-                <span className="text-kooqs-red font-bold">{formatPrice(total)}</span>.
+                Enter your MTN number and you&apos;ll receive an OTP to confirm your{" "}
+                <span className="text-kooqs-red font-bold">{formatPrice(total)}</span> payment.
               </p>
               <div className="flex items-center gap-2 mt-4">
                 <span className="text-xs text-kooqs-text-dim">🔒 Secured by</span>
