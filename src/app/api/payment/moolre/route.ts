@@ -39,7 +39,8 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     return NextResponse.json({ ...data, ref });
   } catch (error) {
-    console.error("[Moolre] Payment error:", error);
-    return NextResponse.json({ error: "Payment initiation failed" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[Moolre] Payment error:", msg);
+    return NextResponse.json({ error: "Payment initiation failed", detail: msg }, { status: 500 });
   }
 }
