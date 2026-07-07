@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight, CreditCard } from "lucide-react";
+import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight, Phone, CheckCircle } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { formatPrice } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -12,48 +12,23 @@ import Navbar from "@/components/Navbar";
 
 const DELIVERY_FEE = parseFloat(process.env.NEXT_PUBLIC_DELIVERY_FEE ?? "2.99");
 const FREE_THRESHOLD = parseFloat(process.env.NEXT_PUBLIC_FREE_DELIVERY_THRESHOLD ?? "30");
-const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "";
 
-declare global {
-  interface Window {
-    PaystackPop: {
-      setup: (config: {
-        key: string;
-        email: string;
-        amount: number;
-        currency: string;
-        ref: string;
-        label?: string;
-        metadata?: object;
-        callback: (response: { reference: string }) => void;
-        onClose: () => void;
-      }) => { openIframe: () => void };
-    };
-  }
-}
+type OrderType = "pickup" | "delivery";
+type PayStep = "form" | "sending" | "awaiting" | "creating";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { state, subtotal, clearCart } = useCart();
-  const [orderType, setOrderType] = useState<"pickup" | "delivery">("pickup");
-  const [loading, setLoading] = useState(false);
-  const [paystackReady, setPaystackReady] = useState(false);
+  const [orderType, setOrderType] = useState<OrderType>("pickup");
+  const [payStep, setPayStep] = useState<PayStep>("form");
+  const [moolreRef, setMoolreRef] = useState("");
 
   const [form, setForm] = useState({
-    customerName: "", email: "", phone: "", address: "", notes: "",
+    customerName: "", phone: "", address: "", notes: "",
   });
 
   const deliveryFee = orderType === "delivery" && subtotal < FREE_THRESHOLD ? DELIVERY_FEE : 0;
   const total = subtotal + deliveryFee;
-
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://js.paystack.co/v1/inline.js";
-    script.async = true;
-    script.onload = () => setPaystackReady(true);
-    document.body.appendChild(script);
-    return () => { document.body.removeChild(script); };
-  }, []);
 
   if (state.items.length === 0) {
     return (
@@ -68,7 +43,35 @@ export default function CheckoutPage() {
     );
   }
 
-  async function createOrder(paystackRef: string) {
+  async function initiateMoolrePayment() {
+    setPayStep("sending");
+    const externalRef = `KOOQS_${Date.now()}`;
+
+    try {
+      const res = await fetch("/api/payment/moolre", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: total, phone: form.phone, externalRef }),
+      });
+
+      const data = await res.json();
+
+      if (data.code === "TR099" || data.code === "TP14" || data.status === 1) {
+        setMoolreRef(externalRef);
+        setPayStep("awaiting");
+        toast.success("Payment prompt sent! Check your phone.");
+      } else {
+        toast.error(data.message || "Payment initiation failed. Please try again.");
+        setPayStep("form");
+      }
+    } catch {
+      toast.error("Network error. Please try again.");
+      setPayStep("form");
+    }
+  }
+
+  async function createOrder() {
+    setPayStep("creating");
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -76,11 +79,10 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           customerName: form.customerName,
           phone: form.phone,
-          email: form.email,
           orderType,
           address: form.address || undefined,
           notes: form.notes || undefined,
-          paystackRef,
+          paystackRef: moolreRef,
           items: state.items.map((i) => ({
             menuItemId: i.menuItem.id,
             quantity: i.quantity,
@@ -94,8 +96,8 @@ export default function CheckoutPage() {
       clearCart();
       router.push(`/order/${order.id}`);
     } catch {
-      toast.error(`Payment was successful but order failed. Quote ref: ${paystackRef} and call us.`);
-      setLoading(false);
+      toast.error(`Order failed. Please call us with ref: ${moolreRef}`);
+      setPayStep("awaiting");
     }
   }
 
@@ -105,36 +107,74 @@ export default function CheckoutPage() {
       toast.error("Please enter your delivery address.");
       return;
     }
-    if (!paystackReady || !window.PaystackPop) {
-      toast.error("Payment system not ready. Please refresh and try again.");
-      return;
-    }
-    setLoading(true);
+    initiateMoolrePayment();
+  }
 
-    const handler = window.PaystackPop.setup({
-      key: PAYSTACK_KEY,
-      email: form.email,
-      amount: Math.round(total * 100),
-      currency: "GHS",
-      ref: `kooqs-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      label: form.customerName,
-      metadata: {
-        custom_fields: [
-          { display_name: "Customer Name", variable_name: "customer_name", value: form.customerName },
-          { display_name: "Phone", variable_name: "phone", value: form.phone },
-          { display_name: "Order Type", variable_name: "order_type", value: orderType },
-        ],
-      },
-      callback: (response) => {
-        createOrder(response.reference);
-      },
-      onClose: () => {
-        toast("Payment cancelled.", { icon: "ℹ️" });
-        setLoading(false);
-      },
-    });
+  if (payStep === "sending") {
+    return (
+      <div className="min-h-screen bg-kooqs-dark flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 size={48} className="text-kooqs-red animate-spin mx-auto mb-4" />
+          <p className="text-white font-bold text-lg">Sending payment prompt…</p>
+          <p className="text-kooqs-text-dim text-sm mt-2">Please wait</p>
+        </div>
+      </div>
+    );
+  }
 
-    handler.openIframe();
+  if (payStep === "awaiting" || payStep === "creating") {
+    return (
+      <div className="min-h-screen bg-kooqs-dark">
+        <Navbar />
+        <main className="max-w-md mx-auto px-4 py-16 text-center">
+          <div className="card p-8">
+            <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Phone size={32} className="text-yellow-400" />
+            </div>
+            <h2 className="text-white font-black text-2xl mb-2">Check Your Phone</h2>
+            <p className="text-kooqs-text-dim text-sm mb-3">
+              A Mobile Money payment prompt has been sent to
+            </p>
+            <p className="text-kooqs-red font-bold text-lg mb-5">{form.phone}</p>
+
+            <div className="bg-kooqs-surface rounded-xl p-4 mb-6 text-left space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-kooqs-text-dim">Amount</span>
+                <span className="text-white font-black">{formatPrice(total)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-kooqs-text-dim">Reference</span>
+                <span className="text-white font-mono text-xs">{moolreRef}</span>
+              </div>
+            </div>
+
+            <p className="text-kooqs-text-dim text-sm mb-6">
+              Approve the payment on your phone, then tap the button below to complete your order.
+            </p>
+
+            <button
+              onClick={createOrder}
+              disabled={payStep === "creating"}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              {payStep === "creating" ? (
+                <><Loader2 size={16} className="animate-spin" /> Creating your order…</>
+              ) : (
+                <><CheckCircle size={16} /> I&apos;ve approved — Place My Order</>
+              )}
+            </button>
+
+            <button
+              onClick={() => setPayStep("form")}
+              disabled={payStep === "creating"}
+              className="mt-4 text-kooqs-text-dim text-sm hover:text-white transition-colors block w-full"
+            >
+              Cancel and go back
+            </button>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -168,7 +208,9 @@ export default function CheckoutPage() {
                     <div className="text-2xl mb-1">{type === "pickup" ? "🏃" : "🚗"}</div>
                     <div className="text-white font-bold capitalize">{type}</div>
                     <div className="text-kooqs-text-dim text-xs mt-0.5">
-                      {type === "pickup" ? "Ready in ~15 min" : `${subtotal >= FREE_THRESHOLD ? "Free!" : formatPrice(DELIVERY_FEE)} delivery`}
+                      {type === "pickup"
+                        ? "Ready in ~15 min"
+                        : `${subtotal >= FREE_THRESHOLD ? "Free!" : formatPrice(DELIVERY_FEE)} delivery`}
                     </div>
                   </button>
                 ))}
@@ -191,18 +233,9 @@ export default function CheckoutPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">Email *</label>
-                  <input
-                    required
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                    placeholder="you@example.com"
-                    className="input"
-                  />
-                </div>
-                <div>
-                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">Phone *</label>
+                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">
+                    MTN MoMo Number *
+                  </label>
                   <input
                     required
                     type="tel"
@@ -211,6 +244,9 @@ export default function CheckoutPage() {
                     placeholder="055 000 0000"
                     className="input"
                   />
+                  <p className="text-kooqs-text-dim text-xs mt-1">
+                    Payment prompt will be sent to this MTN number.
+                  </p>
                 </div>
                 {orderType === "delivery" && (
                   <div>
@@ -228,11 +264,13 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 <div>
-                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">Special Instructions (optional)</label>
+                  <label className="text-kooqs-text-dim text-sm font-medium block mb-1.5">
+                    Special Instructions (optional)
+                  </label>
                   <textarea
                     value={form.notes}
                     onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                    placeholder="Allergies, preferences, delivery instructions..."
+                    placeholder="Allergies, preferences, delivery instructions…"
                     className="input resize-none h-24"
                   />
                 </div>
@@ -242,16 +280,16 @@ export default function CheckoutPage() {
             {/* Payment info */}
             <div className="card p-5">
               <div className="flex items-center gap-3 mb-3">
-                <CreditCard size={20} className="text-kooqs-red" />
-                <h2 className="text-white font-bold text-lg">Payment — Paystack</h2>
+                <Phone size={20} className="text-kooqs-red" />
+                <h2 className="text-white font-bold text-lg">Payment — MTN Mobile Money</h2>
               </div>
               <p className="text-kooqs-text-dim text-sm leading-relaxed">
-                You&apos;ll be taken to a secure Paystack checkout to pay{" "}
-                <span className="text-kooqs-red font-bold">{formatPrice(total)}</span>. We accept cards, MTN MoMo, Vodafone Cash, and AirtelTigo Money.
+                A USSD prompt will be sent to your MTN number. Approve it on your phone to pay{" "}
+                <span className="text-kooqs-red font-bold">{formatPrice(total)}</span>.
               </p>
               <div className="flex items-center gap-2 mt-4">
                 <span className="text-xs text-kooqs-text-dim">🔒 Secured by</span>
-                <span className="text-xs font-bold text-white">Paystack</span>
+                <span className="text-xs font-bold text-white">Moolre</span>
               </div>
             </div>
           </div>
@@ -300,17 +338,12 @@ export default function CheckoutPage() {
 
               <button
                 type="submit"
-                disabled={loading}
                 className="btn-primary w-full mt-5 flex items-center justify-center gap-2"
               >
-                {loading ? (
-                  <><Loader2 size={16} className="animate-spin" /> Processing...</>
-                ) : (
-                  <><CreditCard size={16} /> Pay {formatPrice(total)} with Paystack <ChevronRight size={16} /></>
-                )}
+                <Phone size={16} /> Pay {formatPrice(total)} via MoMo <ChevronRight size={16} />
               </button>
               <p className="text-kooqs-text-dim text-xs text-center mt-3">
-                🔒 Your payment is secured by Paystack
+                🔒 Secured by Moolre
               </p>
             </div>
           </div>
