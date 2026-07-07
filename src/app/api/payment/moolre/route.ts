@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+function env(key: string) {
+  return (process.env[key] ?? "").replace(/^﻿/, "").trim();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { amount, phone, externalRef, sessionId } = await request.json();
@@ -20,18 +24,18 @@ export async function POST(request: NextRequest) {
       amount: Number(amount),
       payer: cleanPhone,
       externalref: ref,
-      accountnumber: process.env.MOOLRE_ACCOUNT_NUMBER!,
+      accountnumber: env("MOOLRE_ACCOUNT_NUMBER"),
     };
 
-    if (sessionId) body.sessionid = String(sessionId);
+    if (sessionId) body.sessionid = String(sessionId).trim();
 
     const response = await fetch("https://api.moolre.com/open/transact/payment", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-USER": process.env.MOOLRE_USER!,
-        "X-API-KEY": process.env.MOOLRE_API_KEY!,
-        "X-API-PUBKEY": process.env.MOOLRE_PUB_KEY!,
+        "X-API-USER": env("MOOLRE_USER"),
+        "X-API-KEY": env("MOOLRE_API_KEY"),
+        "X-API-PUBKEY": env("MOOLRE_PUB_KEY"),
       },
       body: JSON.stringify(body),
     });
