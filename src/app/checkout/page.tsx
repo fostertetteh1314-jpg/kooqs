@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight, Phone, CheckCircle, Copy } from "lucide-react";
+import { ArrowLeft, MapPin, ShoppingBag, Loader2, ChevronRight, ExternalLink, CheckCircle } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { formatPrice } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -12,14 +12,10 @@ import Navbar from "@/components/Navbar";
 
 const DELIVERY_FEE = parseFloat(process.env.NEXT_PUBLIC_DELIVERY_FEE ?? "2.99");
 const FREE_THRESHOLD = parseFloat(process.env.NEXT_PUBLIC_FREE_DELIVERY_THRESHOLD ?? "30");
-
-const MOMO_NUMBERS = [
-  { network: "MTN", number: process.env.NEXT_PUBLIC_MOMO_MTN_NUMBER ?? "055 090 7888", color: "bg-yellow-500" },
-  { network: "Vodafone", number: process.env.NEXT_PUBLIC_MOMO_VODAFONE_NUMBER ?? "055 470 4380", color: "bg-red-500" },
-];
+const MOOLRE_POS = process.env.NEXT_PUBLIC_MOOLRE_POS_LINK ?? "";
 
 type OrderType = "pickup" | "delivery";
-type PayStep = "form" | "confirming" | "creating";
+type PayStep = "form" | "paying" | "creating";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -46,6 +42,12 @@ export default function CheckoutPage() {
         </div>
       </div>
     );
+  }
+
+  function openPOS() {
+    const url = `${MOOLRE_POS}?amount=${total.toFixed(2)}&ref=${orderRef}&name=${encodeURIComponent(form.customerName)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    setPayStep("paying");
   }
 
   async function createOrder() {
@@ -75,7 +77,7 @@ export default function CheckoutPage() {
       router.push(`/order/${order.id}`);
     } catch {
       toast.error("Order failed. Please call us directly.");
-      setPayStep("confirming");
+      setPayStep("paying");
     }
   }
 
@@ -85,55 +87,45 @@ export default function CheckoutPage() {
       toast.error("Please enter your delivery address.");
       return;
     }
-    setPayStep("confirming");
+    openPOS();
   }
 
-  function copyNumber(num: string) {
-    navigator.clipboard.writeText(num.replace(/\s/g, ""));
-    toast.success("Number copied!");
-  }
-
-  if (payStep === "confirming" || payStep === "creating") {
+  if (payStep === "paying" || payStep === "creating") {
     return (
       <div className="min-h-screen bg-kooqs-dark">
         <Navbar />
         <main className="max-w-md mx-auto px-4 py-10 text-center">
           <div className="card p-7">
-            <div className="w-14 h-14 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Phone size={28} className="text-yellow-400" />
+            <div className="w-14 h-14 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ExternalLink size={28} className="text-green-400" />
             </div>
-            <h2 className="text-white font-black text-2xl mb-1">Send Mobile Money</h2>
+            <h2 className="text-white font-black text-2xl mb-2">Complete Your Payment</h2>
             <p className="text-kooqs-text-dim text-sm mb-5">
-              Send exactly <span className="text-kooqs-red font-bold">{formatPrice(total)}</span> to any number below, then tap <strong className="text-white">Place My Order</strong>.
+              A Moolre payment page has opened in a new tab. Pay{" "}
+              <span className="text-kooqs-red font-bold">{formatPrice(total)}</span>, then come back here and tap the button below.
             </p>
 
-            <div className="space-y-3 mb-5">
-              {MOMO_NUMBERS.filter(m => m.number).map((m) => (
-                <div key={m.network} className="flex items-center justify-between bg-kooqs-surface rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className={`w-2.5 h-2.5 rounded-full ${m.color}`} />
-                    <div className="text-left">
-                      <p className="text-kooqs-text-dim text-xs">{m.network} MoMo</p>
-                      <p className="text-white font-bold">{m.number}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => copyNumber(m.number)} className="text-kooqs-text-dim hover:text-white transition-colors">
-                    <Copy size={15} />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="bg-kooqs-surface rounded-xl p-4 mb-6 text-left space-y-1.5">
+            <div className="bg-kooqs-surface rounded-xl p-4 mb-5 text-left space-y-1.5">
               <div className="flex justify-between text-sm">
                 <span className="text-kooqs-text-dim">Amount</span>
                 <span className="text-white font-black">{formatPrice(total)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-kooqs-text-dim">Your name as reference</span>
-                <span className="text-white font-semibold">{form.customerName.split(" ")[0]}</span>
+                <span className="text-kooqs-text-dim">Reference</span>
+                <span className="text-white font-mono text-xs">{orderRef}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-kooqs-text-dim">Name</span>
+                <span className="text-white">{form.customerName}</span>
               </div>
             </div>
+
+            <button
+              onClick={openPOS}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-kooqs-border text-kooqs-text-dim hover:text-white hover:border-white transition-colors text-sm mb-3"
+            >
+              <ExternalLink size={15} /> Reopen payment page
+            </button>
 
             <button
               onClick={createOrder}
@@ -143,7 +135,7 @@ export default function CheckoutPage() {
               {payStep === "creating" ? (
                 <><Loader2 size={16} className="animate-spin" /> Placing your order…</>
               ) : (
-                <><CheckCircle size={16} /> I&apos;ve sent the payment — Place My Order</>
+                <><CheckCircle size={16} /> I&apos;ve paid — Place My Order</>
               )}
             </button>
 
@@ -255,20 +247,18 @@ export default function CheckoutPage() {
             {/* Payment info */}
             <div className="card p-5">
               <div className="flex items-center gap-3 mb-3">
-                <Phone size={20} className="text-kooqs-red" />
-                <h2 className="text-white font-bold text-lg">Payment — Mobile Money</h2>
+                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <ExternalLink size={16} className="text-green-400" />
+                </div>
+                <h2 className="text-white font-bold text-lg">Payment — Moolre</h2>
               </div>
               <p className="text-kooqs-text-dim text-sm leading-relaxed">
-                After reviewing your order, you&apos;ll be shown our MoMo numbers to send{" "}
-                <span className="text-kooqs-red font-bold">{formatPrice(total)}</span>. We&apos;ll confirm and start preparing once payment is received.
+                You&apos;ll be taken to a secure Moolre payment page to pay{" "}
+                <span className="text-kooqs-red font-bold">{formatPrice(total)}</span>. Accepts MTN MoMo, Vodafone Cash, and AirtelTigo Money.
               </p>
-              <div className="flex items-center gap-4 mt-4">
-                <span className="flex items-center gap-1.5 text-xs text-kooqs-text-dim">
-                  <span className="w-2 h-2 rounded-full bg-yellow-500" /> MTN MoMo
-                </span>
-                <span className="flex items-center gap-1.5 text-xs text-kooqs-text-dim">
-                  <span className="w-2 h-2 rounded-full bg-red-500" /> Vodafone Cash
-                </span>
+              <div className="flex items-center gap-2 mt-4">
+                <span className="text-xs text-kooqs-text-dim">🔒 Secured by</span>
+                <span className="text-xs font-bold text-white">Moolre</span>
               </div>
             </div>
           </div>
@@ -319,10 +309,10 @@ export default function CheckoutPage() {
                 type="submit"
                 className="btn-primary w-full mt-5 flex items-center justify-center gap-2"
               >
-                <Phone size={16} /> Continue to Payment <ChevronRight size={16} />
+                <ExternalLink size={16} /> Pay {formatPrice(total)} with Moolre <ChevronRight size={16} />
               </button>
               <p className="text-kooqs-text-dim text-xs text-center mt-3">
-                MTN MoMo &amp; Vodafone Cash accepted
+                🔒 Secured by Moolre · MTN · Vodafone · AirtelTigo
               </p>
             </div>
           </div>
