@@ -25,16 +25,27 @@ export default function AdminOrderWatcher() {
   }, []);
 
   const playTone = useCallback((ctx: AudioContext, freq: number, duration: number) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(freq, ctx.currentTime);
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + duration / 1000);
+    // Two square-wave oscillators an octave apart through a compressor,
+    // driven at full gain — as loud as the browser allows.
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-6, ctx.currentTime);
+    compressor.ratio.setValueAtTime(20, ctx.currentTime);
+    compressor.connect(ctx.destination);
+
+    const secs = duration / 1000;
+    for (const f of [freq, freq * 2]) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(compressor);
+      osc.type = "square";
+      osc.frequency.setValueAtTime(f, ctx.currentTime);
+      gain.gain.setValueAtTime(1.0, ctx.currentTime);
+      gain.gain.setValueAtTime(1.0, ctx.currentTime + secs * 0.8);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + secs);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + secs);
+    }
   }, []);
 
   const startSiren = useCallback(() => {
@@ -44,12 +55,14 @@ export default function AdminOrderWatcher() {
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     audioCtxRef.current = ctx;
     let high = true;
-    playTone(ctx, 880, 380);
+    playTone(ctx, 880, 450);
+    if (navigator.vibrate) navigator.vibrate([400, 100, 400, 100, 400]);
     sirenIntervalRef.current = setInterval(() => {
       if (!audioCtxRef.current) return;
-      playTone(audioCtxRef.current, high ? 660 : 900, 380);
+      playTone(audioCtxRef.current, high ? 660 : 950, 450);
+      if (navigator.vibrate) navigator.vibrate(400);
       high = !high;
-    }, 420);
+    }, 480);
   }, [stopSiren, playTone]);
 
   const dismiss = useCallback(() => {
