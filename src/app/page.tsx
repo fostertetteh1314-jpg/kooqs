@@ -39,7 +39,7 @@ export default async function HomePage() {
           <MenuSection categories={categories} />
         </main>
         <footer className="border-t border-kooqs-border mt-16 py-8 text-center text-kooqs-text-dim text-sm">
-          <p>© {new Date().getFullYear()} <span className="text-gradient-flame font-bold">Kooqs.Takeout</span> · All Rights Reserved · 055 090 7888</p>
+          <p>© {new Date().getFullYear()} <span className="text-gradient-flame font-bold">Kooqs.Takeout</span> · All Rights Reserved · 059 996 6902</p>
         </footer>
       </div>
     </SplashGate>

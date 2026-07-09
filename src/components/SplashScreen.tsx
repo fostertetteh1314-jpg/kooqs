@@ -56,7 +56,7 @@ export default function SplashScreen({ onComplete }: Props) {
         <p className="text-kooqs-text-dim mt-3 text-sm font-medium tracking-widest uppercase">
           Fresh · Fast · Flavorful
         </p>
-        <p className="text-kooqs-text-dim text-xs mt-1 opacity-60">055 090 7888</p>
+        <p className="text-kooqs-text-dim text-xs mt-1 opacity-60">059 996 6902</p>
       </div>
     </div>
   );

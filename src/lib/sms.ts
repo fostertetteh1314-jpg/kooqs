@@ -53,6 +53,6 @@ export function buildOrderConfirmationSMS(params: {
   return (
     `Hi ${firstName}! Your Kooqs Takeout order #${orderNumber} (GHS ${total.toFixed(2)}) ` +
     `is confirmed for ${typeText}. Ready in ${eta}. ` +
-    `Questions? Call 055 090 7888. Thank you!`
+    `Questions? Call 059 996 6902. Thank you!`
   );
 }

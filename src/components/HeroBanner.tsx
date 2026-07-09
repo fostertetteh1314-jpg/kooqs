@@ -22,7 +22,7 @@ export default function HeroBanner({ featuredCount, images }: { featuredCount: n
               <span className="text-gradient-flame">Flavorful.</span>
             </h1>
             <p className="text-kooqs-text mt-4 text-base max-w-md">
-              Jollof rice, fried rice, noodles, grilled tilapia & more — made fresh to order, ready in minutes. Call us: <span className="text-kooqs-orange font-semibold">055 090 7888</span>
+              Jollof rice, fried rice, noodles, grilled tilapia & more — made fresh to order, ready in minutes. Call us: <span className="text-kooqs-orange font-semibold">059 996 6902</span>
             </p>
 
             <div className="flex flex-wrap items-center gap-4 mt-8 justify-center md:justify-start">

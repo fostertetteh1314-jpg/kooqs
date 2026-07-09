@@ -110,7 +110,7 @@ function TrackForm() {
                 className="flex items-center justify-center gap-1.5 text-kooqs-orange font-semibold text-sm hover:underline"
               >
                 <Phone size={13} />
-                {process.env.NEXT_PUBLIC_RESTAURANT_PHONE ?? "055 090 7888"}
+                {process.env.NEXT_PUBLIC_RESTAURANT_PHONE ?? "059 996 6902"}
               </a>
             </div>
           </div>
