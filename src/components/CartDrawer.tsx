@@ -114,24 +114,17 @@ export default function CartDrawer() {
               <span className="text-kooqs-text-dim">Subtotal</span>
               <span className="text-white font-semibold">{formatPrice(subtotal)}</span>
             </div>
-            {subtotal < FREE_THRESHOLD && (
-              <div className="flex justify-between text-sm">
-                <span className="text-kooqs-text-dim">Delivery fee</span>
-                <span className="text-white">{formatPrice(DELIVERY_FEE)}</span>
-              </div>
-            )}
-            {subtotal >= FREE_THRESHOLD && (
-              <div className="flex justify-between text-sm">
-                <span className="text-kooqs-text-dim">Delivery fee</span>
-                <span className="text-green-400 font-semibold">FREE 🎉</span>
-              </div>
-            )}
+            <p className="text-kooqs-text-dim text-xs">
+              {subtotal >= FREE_THRESHOLD
+                ? "Free delivery if you choose delivery 🎉"
+                : `Delivery costs ${formatPrice(DELIVERY_FEE)} — added only if you choose delivery at checkout.`}
+            </p>
             <Link
               href="/checkout"
               onClick={() => setCartOpen(false)}
               className="btn-primary flex items-center justify-center gap-2 w-full"
             >
-              Checkout — {formatPrice(subtotal + (subtotal < FREE_THRESHOLD ? DELIVERY_FEE : 0))}
+              Checkout — {formatPrice(subtotal)}
               <ArrowRight size={16} />
             </Link>
           </div>
