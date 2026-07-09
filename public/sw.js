@@ -1,4 +1,4 @@
-const CACHE_NAME = "kooqs-v2";
+const CACHE_NAME = "kooqs-v3";
 const SHELL_ASSETS = [
   "/",
   "/manifest.webmanifest",
@@ -27,6 +27,14 @@ self.addEventListener("activate", (e) => {
   return self.clients.claim();
 });
 
+// Clone must happen synchronously, before the response body is handed to the
+// page and consumed — caches.open() resolves too late for res.clone().
+function cachePut(request, res) {
+  if (!res || !res.ok) return;
+  const copy = res.clone();
+  caches.open(CACHE_NAME).then((c) => c.put(request, copy)).catch(() => {});
+}
+
 self.addEventListener("fetch", (e) => {
   const { request } = e;
   if (request.method !== "GET" || !request.url.startsWith("http")) return;
@@ -46,7 +54,7 @@ self.addEventListener("fetch", (e) => {
         (cached) =>
           cached ||
           fetch(request).then((res) => {
-            caches.open(CACHE_NAME).then((c) => c.put(request, res.clone()));
+            cachePut(request, res);
             return res;
           })
       )
@@ -59,10 +67,12 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cached = await cache.match(request);
-        const fresh = fetch(request).then((res) => {
-          cache.put(request, res.clone());
-          return res;
-        });
+        const fresh = fetch(request)
+          .then((res) => {
+            cachePut(request, res);
+            return res;
+          })
+          .catch(() => cached);
         return cached ?? fresh;
       })
     );
@@ -74,7 +84,7 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(request)
         .then((res) => {
-          caches.open(CACHE_NAME).then((c) => c.put(request, res.clone()));
+          cachePut(request, res);
           return res;
         })
         .catch(() => caches.match("/"))
