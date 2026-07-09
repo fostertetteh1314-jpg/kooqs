@@ -9,7 +9,7 @@ export default function Navbar() {
   const { itemCount, toggleCart } = useCart();
 
   return (
-    <header className="sticky top-0 z-40 glass border-b border-kooqs-border">
+    <header className="sticky top-0 z-40 glass border-b border-kooqs-border pt-[env(safe-area-inset-top)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}

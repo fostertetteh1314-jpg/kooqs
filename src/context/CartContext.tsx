@@ -29,13 +29,11 @@ function cartReducer(state: CartState, action: CartAction): CartState {
               ? { ...i, quantity: i.quantity + 1 }
               : i
           ),
-          isOpen: true,
         };
       }
       return {
         ...state,
         items: [...state.items, { menuItem: action.menuItem, quantity: 1, notes: action.notes }],
-        isOpen: true,
       };
     }
     case "REMOVE_ITEM":

@@ -25,7 +25,7 @@ export default function CartDrawer() {
       />
 
       {/* Drawer */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-kooqs-card border-l border-kooqs-border z-50 flex flex-col animate-slide-up">
+      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-kooqs-card border-l border-kooqs-border z-50 flex flex-col animate-slide-up pt-[env(safe-area-inset-top)]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-kooqs-border">
           <div>
@@ -109,7 +109,7 @@ export default function CartDrawer() {
 
         {/* Footer */}
         {state.items.length > 0 && (
-          <div className="border-t border-kooqs-border p-5 space-y-3">
+          <div className="border-t border-kooqs-border p-5 space-y-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
             <div className="flex justify-between text-sm">
               <span className="text-kooqs-text-dim">Subtotal</span>
               <span className="text-white font-semibold">{formatPrice(subtotal)}</span>
