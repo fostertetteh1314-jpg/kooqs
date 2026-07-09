@@ -31,6 +31,7 @@ export const metadata: Metadata = {
     shortcut: "/favicon.png",
   },
   formatDetection: { telephone: false },
+  other: { "mobile-web-app-capable": "yes" },
 };
 
 export const viewport: Viewport = {
